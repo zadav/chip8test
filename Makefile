@@ -27,7 +27,8 @@ SRCS    = $(SRC_DIR)/chip8.c \
           $(SRC_DIR)/cpu.c \
           $(SRC_DIR)/rom.c \
           $(SRC_DIR)/cpu_exec.c \
-          $(SRC_DIR)/ecran.c
+          $(SRC_DIR)/ecran.c \
+          $(SRC_DIR)/clavier.c
 
 # Nom de l'exécutable final
 TARGET  = chip8

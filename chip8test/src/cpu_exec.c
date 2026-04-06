@@ -18,6 +18,7 @@
 #include "cpu.h"
 #include "cpu_exec.h"
 #include "ecran.h"
+#include "clavier.h"
 
 int executerInstruction(void)
 {
@@ -245,11 +246,21 @@ int executerInstruction(void)
         }
 
         /*
-         * 0xEX9E / 0xEXA1 — SKP / SKNP : entrées clavier
-         * Sera implémenté à l'étape 5.
+         * 0xEX9E — SKP VX  : passer l'instruction suivante si touches[VX] == 1
+         * 0xEXA1 — SKNP VX : passer si touches[VX] == 0
          */
         case 0xE000:
-            printf("[KEY] Opcode clavier 0x%04X — etape 5\n", opcode);
+            if (NN == 0x9E) {
+                if (touches[cpu.V[X]])
+                    cpu.pc += 2;
+            } else if (NN == 0xA1) {
+                if (!touches[cpu.V[X]])
+                    cpu.pc += 2;
+            } else {
+                fprintf(stderr, "Opcode inconnu : 0x%04X a 0x%04X\n",
+                        opcode, cpu.pc - 2);
+                return -1;
+            }
             break;
 
         /*
@@ -257,6 +268,24 @@ int executerInstruction(void)
          */
         case 0xF000:
             switch (NN) {
+                case 0x0A: {
+                    /*
+                     * LD VX, K — attendre une touche, stocker son index dans VX.
+                     * Technique : on recule le PC de 2 pour ré-exécuter cet opcode
+                     * au prochain cycle jusqu'à ce qu'une touche soit pressée.
+                     * Dès qu'une touche est détectée, on la stocke dans VX et on
+                     * avance normalement.
+                     */
+                    int trouvee = -1;
+                    for (int k = 0; k < 16; k++) {
+                        if (touches[k]) { trouvee = k; break; }
+                    }
+                    if (trouvee < 0)
+                        cpu.pc -= 2;  /* bloquer : ré-exécuter FX0A */
+                    else
+                        cpu.V[X] = (uint8_t)trouvee;
+                    break;
+                }
                 case 0x07: cpu.V[X] = cpu.compteurJeu;  break;  /* LD VX, DT */
                 case 0x15: cpu.compteurJeu = cpu.V[X];  break;  /* LD DT, VX */
                 case 0x18: cpu.compteurSon = cpu.V[X];  break;  /* LD ST, VX */

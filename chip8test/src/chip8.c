@@ -18,6 +18,7 @@
 #include "rom.h"
 #include "cpu_exec.h"
 #include "ecran.h"
+#include "clavier.h"
 
 /* Nombre d'instructions CPU exécutées par frame (60 Hz) */
 #define CYCLES_PAR_FRAME  8
@@ -59,11 +60,13 @@ int main(int argc, char *argv[])
 
         uint32_t debut = SDL_GetTicks();
 
-        /* 1. Événements SDL */
+        /* 1. Événements SDL (fermeture + clavier) */
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
             if (event.type == SDL_QUIT)
                 actif = 0;
+            /* Transmettre l'événement au module clavier */
+            clavierTraiterEvenement(&event);
         }
 
         /* 2. Exécuter les instructions CPU de cette frame */
