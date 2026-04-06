@@ -19,6 +19,7 @@
 #include "cpu_exec.h"
 #include "ecran.h"
 #include "clavier.h"
+#include "son.h"
 
 /* Nombre d'instructions CPU exécutées par frame (60 Hz) */
 #define CYCLES_PAR_FRAME  8
@@ -38,8 +39,10 @@ int main(int argc, char *argv[])
     if (chargerRom(argv[1]) != 0)
         return EXIT_FAILURE;
 
-    /* --- Ouverture de la fenêtre SDL2 --- */
+    /* --- Ouverture de la fenêtre SDL2 et du son --- */
     if (ecranOuvrir() != 0)
+        return EXIT_FAILURE;
+    if (sonOuvrir() != 0)
         return EXIT_FAILURE;
 
     printf("Emulateur demarre. Fermer la fenetre pour quitter.\n");
@@ -80,6 +83,12 @@ int main(int argc, char *argv[])
         /* 3. Timers à 60 Hz */
         decompter();
 
+        /* 3b. Son : bip si compteurSon > 0 */
+        if (cpu.compteurSon > 0)
+            sonJouer();
+        else
+            sonCouper();
+
         /* 4. Affichage */
         ecranAfficher();
 
@@ -90,6 +99,7 @@ int main(int argc, char *argv[])
     }
 
     /* --- Nettoyage --- */
+    sonFermer();
     ecranFermer();
     return EXIT_SUCCESS;
 }
