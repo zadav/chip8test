@@ -2,7 +2,7 @@
  * chip8.c
  * Point d'entrée de l'émulateur CHIP-8.
  *
- * Étape 2 : chargement d'une ROM passée en argument.
+ * Étape 3 : boucle principale fetch / decode / execute.
  * Usage : ./chip8 <fichier.ch8>
  */
 
@@ -10,41 +10,55 @@
 #include <stdlib.h>
 #include "cpu.h"
 #include "rom.h"
+#include "cpu_exec.h"
+
+/*
+ * Nombre maximum de cycles exécutés par la boucle de test.
+ * Évite une boucle infinie tant qu'on n'a pas de fenêtre graphique.
+ */
+#define MAX_CYCLES 20
 
 int main(int argc, char *argv[])
 {
-    /* Vérification de l'argument */
     if (argc < 2) {
         fprintf(stderr, "Usage : %s <fichier.ch8>\n", argv[0]);
         return EXIT_FAILURE;
     }
 
-    /* --- Initialisation du CPU --- */
+    /* --- Initialisation --- */
     initialiserCpu();
 
     /* --- Chargement de la ROM --- */
     if (chargerRom(argv[1]) != 0)
         return EXIT_FAILURE;
 
-    /* --- Affichage de l'état initial --- */
-    printf("\n=== Etat initial du CPU ===\n");
-    printf("PC      : 0x%04X\n", cpu.pc);
-    printf("I       : 0x%04X\n", cpu.I);
-    printf("V0..VF  : ");
-    for (int i = 0; i < 16; i++)
-        printf("%02X ", cpu.V[i]);
-    printf("\n");
-
-    /* --- Aperçu des 8 premiers octets de la ROM en mémoire --- */
-    printf("\nMemoire[0x200..0x207] : ");
-    for (int i = 0; i < 8; i++)
-        printf("%02X ", cpu.memoire[ADRESSE_DEBUT + i]);
-    printf("\n");
+    printf("\n=== Debut de l'execution (max %d cycles) ===\n\n", MAX_CYCLES);
 
     /*
-     * Prochain ajout ici :
-     *   - boucle principale : fetch / decode / execute
+     * ── BOUCLE PRINCIPALE ──────────────────────────────────────────────
+     * Chaque itération = un cycle CPU :
+     *   1. Afficher l'état courant (PC + opcode qui va être exécuté)
+     *   2. Exécuter l'instruction
+     *   3. Décrémenter les timers (normalement à 60 Hz ; simplifié ici)
      */
+    for (int cycle = 0; cycle < MAX_CYCLES; cycle++) {
+        /* Affichage du cycle en cours pour suivre l'exécution */
+        uint16_t opcode = (cpu.memoire[cpu.pc] << 8) | cpu.memoire[cpu.pc + 1];
+        printf("Cycle %2d | PC=0x%04X | opcode=0x%04X\n",
+               cycle, cpu.pc, opcode);
+
+        /* Exécuter l'instruction */
+        if (executerInstruction() != 0) {
+            fprintf(stderr, "Arret sur erreur.\n");
+            return EXIT_FAILURE;
+        }
+
+        /* Décrémenter les timers */
+        decompter();
+    }
+
+    printf("\n=== Fin des %d cycles ===\n", MAX_CYCLES);
+    printf("PC final : 0x%04X\n", cpu.pc);
 
     return EXIT_SUCCESS;
 }
