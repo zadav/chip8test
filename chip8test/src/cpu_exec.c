@@ -17,6 +17,7 @@
 #include <stdio.h>
 #include "cpu.h"
 #include "cpu_exec.h"
+#include "ecran.h"
 
 int executerInstruction(void)
 {
@@ -59,8 +60,8 @@ int executerInstruction(void)
          */
         case 0x0000:
             if (opcode == 0x00E0) {
-                /* CLS — sera relié à l'affichage à l'étape 4 */
-                printf("[CLS] Effacer l'ecran\n");
+                /* CLS — efface le buffer de pixels */
+                ecranEffacer();
             } else if (opcode == 0x00EE) {
                 /* RET — dépiler l'adresse de retour */
                 if (cpu.nbrsaut == 0) {
@@ -210,12 +211,38 @@ int executerInstruction(void)
 
         /*
          * 0xDXYN — DRW VX, VY, N : dessiner un sprite
-         * Sera implémenté à l'étape 4 (affichage).
+         * ─────────────────────────────────────────────
+         * Le sprite fait N lignes de 8 pixels de large.
+         * Il est stocké en mémoire à l'adresse cpu.I.
+         * Chaque octet = une ligne : le bit 7 est le pixel le plus à gauche.
+         *
+         * Règle XOR : chaque pixel est XORé avec le pixel existant.
+         *   Si un pixel passe de 1 → 0 (collision), on met VF à 1.
+         *   Sinon VF = 0.
+         *
+         * Les coordonnées sont "wrappées" modulo la taille de l'écran.
          */
-        case 0xD000:
-            printf("[DRW] Dessiner sprite %d lignes a (%d,%d) — etape 4\n",
-                   N, cpu.V[X], cpu.V[Y]);
+        case 0xD000: {
+            uint8_t px = cpu.V[X] % ECRAN_LARGEUR;
+            uint8_t py = cpu.V[Y] % ECRAN_HAUTEUR;
+            cpu.V[0xF] = 0;
+
+            for (uint8_t ligne = 0; ligne < N; ligne++) {
+                uint8_t octet = cpu.memoire[cpu.I + ligne];
+                for (uint8_t col = 0; col < 8; col++) {
+                    /* Bit courant : on teste chaque bit de l'octet */
+                    if (octet & (0x80 >> col)) {
+                        uint8_t ex = (px + col) % ECRAN_LARGEUR;
+                        uint8_t ey = (py + ligne) % ECRAN_HAUTEUR;
+                        /* Collision : pixel déjà allumé va s'éteindre */
+                        if (pixels[ey][ex] == 1)
+                            cpu.V[0xF] = 1;
+                        pixels[ey][ex] ^= 1;
+                    }
+                }
+            }
             break;
+        }
 
         /*
          * 0xEX9E / 0xEXA1 — SKP / SKNP : entrées clavier
@@ -235,9 +262,13 @@ int executerInstruction(void)
                 case 0x18: cpu.compteurSon = cpu.V[X];  break;  /* LD ST, VX */
                 case 0x1E: cpu.I += cpu.V[X];           break;  /* ADD I, VX */
                 case 0x29:
-                    /* LD F, VX — pointeur vers le sprite du chiffre VX
-                     * (sprites de fonte, étape 4) */
-                    printf("[FNT] Sprite chiffre %X — etape 4\n", cpu.V[X]);
+                    /*
+                     * LD F, VX — I pointe vers le sprite du chiffre VX (0–F).
+                     * Les 16 sprites de fonte sont chargés en mémoire par
+                     * initialiserCpu() à l'adresse 0x000, 5 octets chacun.
+                     * Donc sprite de VX = adresse 0x000 + VX * 5.
+                     */
+                    cpu.I = cpu.V[X] * 5;
                     break;
                 case 0x33: {
                     /* LD B, VX — stocker VX en BCD à I, I+1, I+2
