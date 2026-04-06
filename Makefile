@@ -18,7 +18,8 @@ SRC_DIR = chip8test/src
 
 # Liste des fichiers sources (.c)
 SRCS    = $(SRC_DIR)/chip8.c \
-          $(SRC_DIR)/cpu.c
+          $(SRC_DIR)/cpu.c \
+          $(SRC_DIR)/rom.c
 
 # Nom de l'exécutable final
 TARGET  = chip8
