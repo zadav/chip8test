@@ -1,0 +1,929 @@
+<title>Zemmour Runner</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;700;900&display=swap">
+
+<style>
+/* ─ tokens: neon-city arcade, single dark theme ─ */
+:root {
+  --bg:        #08080f;
+  --surface:   #0f0f1a;
+  --fg:        #e8e2ff;
+  --muted:     rgba(232,226,255,.45);
+  --accent:    #ff3232;
+  --accent2:   #ffd000;
+  --cop:       #3366ff;
+  --ui-glass:  rgba(8,8,15,.82);
+  --ui-border: rgba(255,50,50,.28);
+  color-scheme: dark;
+  --f-hud:  'Oswald', 'Impact', sans-serif;
+  --f-body: system-ui, sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg); }
+
+body {
+  font-family: var(--f-body);
+  color: var(--fg);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#canvas {
+  position: fixed;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* ── HUD ── */
+#hud {
+  position: fixed;
+  top: max(env(safe-area-inset-top,0px), 10px);
+  left:  max(16px, env(safe-area-inset-left,0px));
+  right: max(16px, env(safe-area-inset-right,0px));
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.hbox {
+  background: var(--ui-glass);
+  border: 1px solid var(--ui-border);
+  border-radius: 7px;
+  padding: 5px 12px 6px;
+  backdrop-filter: blur(12px);
+  min-width: 62px;
+}
+.hbox-label {
+  font-family: var(--f-hud);
+  font-size: 10px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--accent);
+  opacity: .75;
+}
+.hbox-val {
+  font-family: var(--f-hud);
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg);
+}
+#wanted-row {
+  display: flex;
+  gap: 2px;
+  margin-top: 3px;
+}
+.star { font-size: 13px; color: #2a2a3a; transition: color .2s, text-shadow .2s; }
+.star.lit { color: var(--accent2); text-shadow: 0 0 8px var(--accent2); }
+
+/* ── JOYSTICK ── */
+#joy-zone {
+  position: fixed;
+  bottom: max(calc(env(safe-area-inset-bottom,0px) + 16px), 24px);
+  left:  max(20px, env(safe-area-inset-left,0px));
+  width: 136px;
+  height: 136px;
+  z-index: 10;
+}
+#joy-base {
+  position: absolute;
+  inset: 8px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.05);
+  border: 2px solid rgba(255,255,255,.14);
+}
+#joy-knob {
+  position: absolute;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.22);
+  border: 2px solid rgba(255,255,255,.5);
+  top: 50%; left: 50%;
+  transform: translate(-50%,-50%);
+  pointer-events: none;
+}
+
+/* ── PUNCH BUTTON ── */
+#punch-btn {
+  position: fixed;
+  bottom: max(calc(env(safe-area-inset-bottom,0px) + 20px), 28px);
+  right:  max(22px, env(safe-area-inset-right,0px));
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  border: 3px solid rgba(255,255,255,.25);
+  background: var(--accent);
+  color: #fff;
+  font-family: var(--f-hud);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: .07em;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  z-index: 10;
+  cursor: pointer;
+  box-shadow: 0 0 28px rgba(255,50,50,.55);
+  transition: transform .08s, box-shadow .08s;
+  -webkit-tap-highlight-color: transparent;
+}
+#punch-btn .icon { font-size: 26px; line-height: 1; }
+#punch-btn.pressed { transform: scale(.85); box-shadow: 0 0 8px rgba(255,50,50,.3); }
+
+/* ── OVERLAYS ── */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(8,8,15,.93);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 20;
+  padding: max(24px, env(safe-area-inset-top,0px)) max(24px, env(safe-area-inset-right,0px)) max(24px, env(safe-area-inset-bottom,0px)) max(24px, env(safe-area-inset-left,0px));
+  text-align: center;
+}
+
+.ov-title {
+  font-family: var(--f-hud);
+  font-size: clamp(38px, 11vw, 68px);
+  font-weight: 900;
+  line-height: .95;
+  letter-spacing: -.01em;
+  margin-bottom: 14px;
+  text-wrap: balance;
+}
+.ov-title em { color: var(--accent); font-style: normal; }
+
+.ov-sub {
+  font-size: clamp(13px, 3.5vw, 16px);
+  color: var(--muted);
+  max-width: 300px;
+  line-height: 1.55;
+  margin-bottom: 32px;
+}
+
+.tag {
+  display: inline-block;
+  font-family: var(--f-hud);
+  font-size: 10px;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  padding: 3px 8px;
+  margin-bottom: 18px;
+}
+
+.btn-play {
+  font-family: var(--f-hud);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: #fff;
+  background: var(--accent);
+  border: none;
+  border-radius: 6px;
+  padding: 14px 44px;
+  cursor: pointer;
+  box-shadow: 0 0 36px rgba(255,50,50,.45);
+  transition: transform .1s, box-shadow .1s;
+}
+.btn-play:active { transform: scale(.94); }
+
+.score-big {
+  font-family: var(--f-hud);
+  font-size: clamp(64px, 18vw, 100px);
+  font-weight: 900;
+  color: var(--accent2);
+  line-height: 1;
+  text-shadow: 0 0 30px rgba(255,208,0,.5);
+}
+.score-unit {
+  font-family: var(--f-hud);
+  font-size: 13px;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 18px;
+}
+
+.controls-hint {
+  margin-top: 20px;
+  font-size: 12px;
+  color: rgba(232,226,255,.28);
+  letter-spacing: .04em;
+}
+
+/* ── COMBO POP ── */
+#combo-pop {
+  position: fixed;
+  top: 28%;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--f-hud);
+  font-size: 34px;
+  font-weight: 900;
+  color: var(--accent2);
+  text-shadow: 0 0 18px rgba(255,208,0,.85);
+  pointer-events: none;
+  z-index: 15;
+  opacity: 0;
+  white-space: nowrap;
+}
+@keyframes comboFly {
+  0%   { opacity:1; transform: translateX(-50%) translateY(0)   scale(.6); }
+  55%  { opacity:1; transform: translateX(-50%) translateY(-28px) scale(1.15); }
+  100% { opacity:0; transform: translateX(-50%) translateY(-56px) scale(1); }
+}
+#combo-pop.go { animation: comboFly .65s ease-out forwards; }
+
+/* ── CAUGHT FLASH ── */
+#flash {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 18;
+  background: var(--accent);
+  opacity: 0;
+  transition: opacity .08s;
+}
+#flash.show { opacity: .45; }
+
+/* ── MINI-MAP ── */
+#minimap {
+  position: fixed;
+  bottom: max(calc(env(safe-area-inset-bottom,0px) + 16px), 24px);
+  right:  max(22px, env(safe-area-inset-right,0px));
+  bottom: max(calc(env(safe-area-inset-bottom,0px) + 120px), 128px);
+  width: 80px;
+  height: 80px;
+  border-radius: 6px;
+  background: var(--ui-glass);
+  border: 1px solid var(--ui-border);
+  overflow: hidden;
+  z-index: 9;
+  pointer-events: none;
+}
+#minimap canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  position: static;
+}
+</style>
+
+<canvas id="canvas"></canvas>
+
+<!-- HUD -->
+<div id="hud">
+  <div class="hbox">
+    <div class="hbox-label">Score</div>
+    <div class="hbox-val" id="hud-score">0</div>
+  </div>
+  <div class="hbox" style="text-align:center">
+    <div class="hbox-label">Recherché</div>
+    <div id="wanted-row">
+      <span class="star" id="s1">★</span>
+      <span class="star" id="s2">★</span>
+      <span class="star" id="s3">★</span>
+      <span class="star" id="s4">★</span>
+      <span class="star" id="s5">★</span>
+    </div>
+  </div>
+  <div class="hbox" style="text-align:right">
+    <div class="hbox-label">Temps</div>
+    <div class="hbox-val" id="hud-timer">60</div>
+  </div>
+</div>
+
+<!-- Joystick -->
+<div id="joy-zone">
+  <div id="joy-base"><div id="joy-knob"></div></div>
+</div>
+
+<!-- Punch -->
+<button id="punch-btn">
+  <span class="icon">👊</span>PUNCH
+</button>
+
+<!-- Mini-map -->
+<div id="minimap"><canvas id="mm-canvas" width="80" height="80"></canvas></div>
+
+<!-- Combo -->
+<div id="combo-pop"></div>
+<!-- Flash -->
+<div id="flash"></div>
+
+<!-- Start screen -->
+<div class="overlay" id="ov-start">
+  <div class="tag">Jeu de satire politique</div>
+  <div class="ov-title">ZEMMOUR<br><em>RUNNER</em></div>
+  <p class="ov-sub">Distribue des coups de poing et fuis la police ! Plus tu frappes, plus ta cote de criminalité monte… et les flics arrivent.</p>
+  <button class="btn-play" id="btn-start">JOUER</button>
+  <p class="controls-hint">Joystick gauche · Bouton PUNCH · Clavier WASD + Espace</p>
+</div>
+
+<!-- Game-over screen -->
+<div class="overlay" id="ov-over" hidden>
+  <div class="ov-title" style="font-size:clamp(26px,7vw,42px)" id="go-title">ARRÊTÉ !</div>
+  <div class="score-big" id="go-score">0</div>
+  <div class="score-unit">points</div>
+  <p class="ov-sub" id="go-reason" style="margin-bottom:24px"></p>
+  <button class="btn-play" id="btn-restart">REJOUER</button>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+'use strict';
+
+// ── CONFIG ──────────────────────────────────────────────────────────────────
+const C = {
+  ARENA:        38,
+  PLAYER_SPEED: 8,
+  RUN_SPEED:    13.5,
+  NPC_SPEED:    3.8,
+  COP_SPEED:    5.8,
+  PUNCH_RANGE:  2.7,
+  PUNCH_CD:     550,
+  PTS_BASE:     10,
+  GAME_SEC:     60,
+  MAX_COPS:     6,
+  NPC_N:        14,
+};
+
+// ── STATE ────────────────────────────────────────────────────────────────────
+let phase   = 'start'; // start | play | dead
+let score   = 0;
+let wanted  = 0;
+let timeLeft= C.GAME_SEC;
+let combo   = 0;
+let lastPunch = 0;
+let timerID = null;
+
+// ── RENDERER ─────────────────────────────────────────────────────────────────
+const canvas  = document.getElementById('canvas');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference:'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2.5));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.setClearColor(0x08080f);
+
+const scene  = new THREE.Scene();
+scene.fog    = new THREE.Fog(0x08080f, 35, 72);
+
+const cam = new THREE.PerspectiveCamera(55, 1, 0.1, 200);
+cam.position.set(0, 13, 19);
+cam.lookAt(0, 0, 0);
+
+function resize() {
+  const w = window.innerWidth, h = window.innerHeight;
+  renderer.setSize(w, h);
+  cam.aspect = w / h;
+  cam.updateProjectionMatrix();
+}
+resize();
+window.addEventListener('resize', resize);
+
+// ── LIGHTS ───────────────────────────────────────────────────────────────────
+scene.add(new THREE.AmbientLight(0x3030aa, 0.7));
+
+const sun = new THREE.DirectionalLight(0xffffff, 1.1);
+sun.position.set(12, 22, 10);
+sun.castShadow = true;
+Object.assign(sun.shadow.mapSize, { width: 1024, height: 1024 });
+Object.assign(sun.shadow.camera, { near:.5, far:100, left:-50, right:50, top:50, bottom:-50 });
+scene.add(sun);
+
+// Streetlamps
+[[-16,-16],[16,-16],[-16,16],[16,16],[0,-26],[0,26],[-26,0],[26,0]].forEach(([x,z])=>{
+  const pl = new THREE.PointLight(0xffaa44, 1.8, 20);
+  pl.position.set(x, 6, z);
+  scene.add(pl);
+  const post = new THREE.Mesh(
+    new THREE.CylinderGeometry(.07,.07,5,6),
+    new THREE.MeshLambertMaterial({color:0x445566})
+  );
+  post.position.set(x, 2.5, z);
+  scene.add(post);
+  const globe = new THREE.Mesh(
+    new THREE.SphereGeometry(.28,8,6),
+    new THREE.MeshBasicMaterial({color:0xffddaa})
+  );
+  globe.position.set(x, 5.2, z);
+  scene.add(globe);
+});
+
+// ── GROUND & CITY ─────────────────────────────────────────────────────────────
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(100, 100),
+  new THREE.MeshLambertMaterial({color:0x18182a})
+);
+ground.rotation.x = -Math.PI/2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+// Dashed lane lines
+const dashMat = new THREE.MeshBasicMaterial({color:0xffff66, opacity:.3, transparent:true});
+for (let i=-3; i<=3; i++) for (let j=-5; j<=5; j++) {
+  const d = new THREE.Mesh(new THREE.PlaneGeometry(.12,3.5), dashMat);
+  d.rotation.x = -Math.PI/2;
+  d.position.set(i*11, .02, j*7+3.5);
+  scene.add(d);
+}
+
+// Buildings
+const bldMats = [0x181828, 0x1a1e30, 0x1e1a2c, 0x141c2a].map(c=>new THREE.MeshLambertMaterial({color:c}));
+const winMat  = new THREE.MeshBasicMaterial({color:0x88aaff, opacity:.55, transparent:true});
+
+function building(x, z, w, d, h) {
+  const b = new THREE.Mesh(
+    new THREE.BoxGeometry(w, h, d),
+    bldMats[Math.floor(Math.random()*bldMats.length)]
+  );
+  b.position.set(x, h/2, z);
+  b.castShadow = true;
+  b.receiveShadow = true;
+  scene.add(b);
+  for (let wy=2; wy<h-1; wy+=2.2) {
+    for (let wx=-w/2+1.2; wx<w/2-.5; wx+=1.8) {
+      if (Math.random()>.3) {
+        const win = new THREE.Mesh(new THREE.PlaneGeometry(.7,.85), winMat);
+        win.position.set(x+wx, wy, z+d/2+.01);
+        scene.add(win);
+      }
+    }
+  }
+}
+
+[[-46,-18,9,8,20],[-46,6,8,10,26],[-46,28,11,8,15],
+ [46,-18,9,8,18],[46,6,8,10,22],[46,28,11,8,28],
+ [-14,-46,13,9,14],[8,-46,9,9,20],[28,-46,8,9,16],
+ [-14,46,13,9,22],[8,46,9,9,16],[28,46,8,9,20]].forEach(a=>building(...a));
+
+// ── CHARACTER FACTORY ─────────────────────────────────────────────────────────
+function makeChar(bodyCol, skinCol) {
+  const g   = new THREE.Group();
+  const bm  = new THREE.MeshLambertMaterial({color:bodyCol});
+  const sm  = new THREE.MeshLambertMaterial({color:skinCol});
+  const dark= new THREE.MeshLambertMaterial({color:0x0a0a1a});
+
+  const body = new THREE.Mesh(new THREE.BoxGeometry(.68,.95,.38), bm);
+  body.position.y = .8; body.castShadow = true; g.add(body);
+
+  const head = new THREE.Mesh(new THREE.BoxGeometry(.52,.52,.48), sm);
+  head.position.y = 1.62; head.castShadow = true; g.add(head);
+
+  const eyeG = new THREE.BoxGeometry(.09,.07,.01);
+  const eyeM = new THREE.MeshBasicMaterial({color:0x000000, opacity:.6, transparent:true});
+  [-1,1].forEach(s=>{
+    const e = new THREE.Mesh(eyeG, eyeM);
+    e.position.set(s*.12, 1.65, .25);
+    g.add(e);
+  });
+
+  const armG = new THREE.BoxGeometry(.2,.65,.2);
+  const armL = new THREE.Mesh(armG, bm); armL.position.set(-.46,.82,0); armL.castShadow=true; g.add(armL);
+  const armR = new THREE.Mesh(armG, bm); armR.position.set( .46,.82,0); armR.castShadow=true; g.add(armR);
+
+  const legG = new THREE.BoxGeometry(.24,.62,.24);
+  const legL = new THREE.Mesh(legG, dark); legL.position.set(-.18,.17,0); legL.castShadow=true; g.add(legL);
+  const legR = new THREE.Mesh(legG, dark); legR.position.set( .18,.17,0); legR.castShadow=true; g.add(legR);
+
+  const shadow = new THREE.Mesh(
+    new THREE.CircleGeometry(.38,10),
+    new THREE.MeshBasicMaterial({color:0x000000, opacity:.28, transparent:true})
+  );
+  shadow.rotation.x = -Math.PI/2;
+  shadow.position.y = .01;
+  g.add(shadow);
+
+  g._aL = armL; g._aR = armR; g._lL = legL; g._lR = legR;
+  g._wa = 0; g._pa = 0;
+  return g;
+}
+
+// ── PLAYER (Zemmour) ─────────────────────────────────────────────────────────
+const player = makeChar(0x141428, 0xca8868);
+// Hair
+const hair = new THREE.Mesh(
+  new THREE.BoxGeometry(.54,.13,.5),
+  new THREE.MeshLambertMaterial({color:0x1a0000})
+);
+hair.position.y = 1.9;
+player.add(hair);
+// Tie
+const tie = new THREE.Mesh(
+  new THREE.BoxGeometry(.1,.42,.04),
+  new THREE.MeshLambertMaterial({color:0xcc1111})
+);
+tie.position.set(0,.88,.2);
+player.add(tie);
+
+scene.add(player);
+
+// ── NPCs ─────────────────────────────────────────────────────────────────────
+const NPC_PALETTE = [
+  [0x1e4499, 0xf4a47a], [0x1e6622, 0xf0c890], [0x993322, 0xe8d0a0],
+  [0x552288, 0xf4a47a], [0x1e8888, 0xd4a880], [0x997722, 0xf2b090],
+  [0x664411, 0xf8c09a], [0x226644, 0xecc898],
+];
+const npcs = [];
+
+function spawnNPC() {
+  const [bc, sc] = NPC_PALETTE[Math.floor(Math.random()*NPC_PALETTE.length)];
+  const n = makeChar(bc, sc);
+  n.position.set(
+    (Math.random()-.5)*C.ARENA*1.7, 0,
+    (Math.random()-.5)*C.ARENA*1.7
+  );
+  n._hp    = 3;
+  n._stun  = 0;
+  n._wdst  = new THREE.Vector3();
+  n._wt    = 0;
+  n._type  = 'npc';
+  scene.add(n);
+  npcs.push(n);
+}
+for (let i=0; i<C.NPC_N; i++) spawnNPC();
+
+// ── COPS ──────────────────────────────────────────────────────────────────────
+const cops = [];
+
+function spawnCop() {
+  const cop = makeChar(0x1a44cc, 0xf0c890);
+  // Cap
+  const cap = new THREE.Mesh(
+    new THREE.BoxGeometry(.58,.18,.55),
+    new THREE.MeshLambertMaterial({color:0x122a88})
+  );
+  cap.position.y = 1.88; cop.add(cap);
+  // Badge
+  const badge = new THREE.Mesh(
+    new THREE.BoxGeometry(.11,.09,.04),
+    new THREE.MeshLambertMaterial({color:0xffcc00})
+  );
+  badge.position.set(.21,.83,.21); cop.add(badge);
+
+  const s = C.ARENA + 8;
+  const side = Math.floor(Math.random()*4);
+  cop.position.set(
+    side<2 ? (Math.random()-.5)*s*2 : (side===2?-s:s),
+    0,
+    side<2 ? (side===0?-s:s) : (Math.random()-.5)*s*2
+  );
+  cop._type = 'cop';
+  scene.add(cop);
+  cops.push(cop);
+}
+
+// ── VFX (punch sparks) ────────────────────────────────────────────────────────
+const vfx = [];
+
+function spark(pos) {
+  for (let i=0; i<5; i++) {
+    const m = new THREE.Mesh(
+      new THREE.TetrahedronGeometry(.18),
+      new THREE.MeshBasicMaterial({color: i%2===0 ? 0xffd000 : 0xff6600, transparent:true, opacity:1})
+    );
+    m.position.copy(pos).add(new THREE.Vector3(
+      (Math.random()-.5)*.6, 1.2 + Math.random()*.5, (Math.random()-.5)*.6
+    ));
+    m._v = new THREE.Vector3(
+      (Math.random()-.5)*3, Math.random()*4+1, (Math.random()-.5)*3
+    );
+    m._life = .5;
+    scene.add(m);
+    vfx.push(m);
+  }
+}
+
+// ── JOYSTICK ─────────────────────────────────────────────────────────────────
+const joy = { on:false, id:-1, dx:0, dy:0, ox:0, oy:0 };
+const jKnob = document.getElementById('joy-knob');
+const JR = 44;
+
+function setKnob() {
+  jKnob.style.left = (50 + joy.dx*100)+'%';
+  jKnob.style.top  = (50 + joy.dy*100)+'%';
+}
+
+document.getElementById('joy-zone').addEventListener('touchstart', e=>{
+  e.preventDefault();
+  if (joy.on) return;
+  const t = e.changedTouches[0];
+  joy.on = true; joy.id = t.identifier;
+  joy.ox = t.clientX; joy.oy = t.clientY;
+},{passive:false});
+
+document.addEventListener('touchmove', e=>{
+  e.preventDefault();
+  for (const t of e.changedTouches) {
+    if (t.identifier === joy.id) {
+      const dx = (t.clientX - joy.ox)/JR;
+      const dy = (t.clientY - joy.oy)/JR;
+      const l  = Math.sqrt(dx*dx+dy*dy);
+      const s  = l>1 ? 1/l : 1;
+      joy.dx = dx*s; joy.dy = dy*s;
+      setKnob();
+    }
+  }
+},{passive:false});
+
+document.addEventListener('touchend', e=>{
+  for (const t of e.changedTouches) {
+    if (t.identifier === joy.id) {
+      joy.on=false; joy.id=-1; joy.dx=0; joy.dy=0;
+      setKnob();
+    }
+  }
+});
+
+const keys = {};
+window.addEventListener('keydown', e=>{ keys[e.code]=true; });
+window.addEventListener('keyup',   e=>{ keys[e.code]=false; });
+
+// ── PUNCH ─────────────────────────────────────────────────────────────────────
+const punchBtn = document.getElementById('punch-btn');
+
+function doPunch() {
+  if (phase !== 'play') return;
+  const now = Date.now();
+  if (now - lastPunch < C.PUNCH_CD) return;
+  lastPunch = now;
+
+  punchBtn.classList.add('pressed');
+  setTimeout(()=>punchBtn.classList.remove('pressed'), 140);
+  player._pa = 1;
+
+  let hit = false;
+  for (const n of npcs) {
+    if (n._stun > 0) continue;
+    const d = player.position.distanceTo(n.position);
+    if (d < C.PUNCH_RANGE) {
+      hit = true;
+      n._hp--;
+      n._stun = n._hp<=0 ? 4 : 1.4;
+      spark(n.position);
+      combo++;
+      const pts = C.PTS_BASE * combo;
+      score += pts;
+      wanted = Math.min(5, wanted + 1);
+      const need = Math.min(C.MAX_COPS, Math.ceil(wanted*1.2));
+      while (cops.length < need) spawnCop();
+      updateHUD();
+      popCombo(combo, pts);
+    }
+  }
+  if (!hit) combo = 0;
+}
+
+punchBtn.addEventListener('touchstart', e=>{ e.preventDefault(); doPunch(); },{passive:false});
+punchBtn.addEventListener('mousedown', doPunch);
+window.addEventListener('keydown', e=>{ if (e.code==='Space') doPunch(); });
+
+// ── HUD / STARS ──────────────────────────────────────────────────────────────
+function updateHUD() {
+  document.getElementById('hud-score').textContent = score;
+  for (let i=1; i<=5; i++)
+    document.getElementById('s'+i).classList.toggle('lit', i<=wanted);
+}
+
+function popCombo(c, pts) {
+  const el = document.getElementById('combo-pop');
+  el.textContent = c>1 ? `×${c} COMBO ! +${pts}` : `+${pts}`;
+  el.classList.remove('go');
+  void el.offsetWidth;
+  el.classList.add('go');
+}
+
+// ── MINI-MAP ─────────────────────────────────────────────────────────────────
+const mmCtx = document.getElementById('mm-canvas').getContext('2d');
+const MM = 80;
+const SCALE = MM / (C.ARENA * 2.2);
+
+function drawMinimap() {
+  mmCtx.clearRect(0,0,MM,MM);
+  mmCtx.fillStyle = 'rgba(8,8,15,.6)';
+  mmCtx.fillRect(0,0,MM,MM);
+
+  function world2mm(wx, wz) {
+    return [
+      MM/2 + wx * SCALE,
+      MM/2 + wz * SCALE
+    ];
+  }
+
+  // NPCs
+  mmCtx.fillStyle = '#aaaacc';
+  for (const n of npcs) {
+    if (!n.visible || n._hp===0) continue;
+    const [mx,my] = world2mm(n.position.x, n.position.z);
+    mmCtx.fillRect(mx-1.5, my-1.5, 3, 3);
+  }
+  // Cops
+  mmCtx.fillStyle = '#3366ff';
+  for (const c of cops) {
+    const [mx,my] = world2mm(c.position.x, c.position.z);
+    mmCtx.fillRect(mx-2, my-2, 4, 4);
+  }
+  // Player
+  const [px,py] = world2mm(player.position.x, player.position.z);
+  mmCtx.fillStyle = '#ff3232';
+  mmCtx.beginPath();
+  mmCtx.arc(px, py, 3.5, 0, Math.PI*2);
+  mmCtx.fill();
+}
+
+// ── GAME FLOW ─────────────────────────────────────────────────────────────────
+function startGame() {
+  score=0; wanted=0; timeLeft=C.GAME_SEC; combo=0; lastPunch=0;
+  phase='play';
+
+  player.position.set(0,0,0);
+
+  npcs.forEach(n=>{
+    n._hp=3; n._stun=0;
+    n.rotation.z=0; n.rotation.x=0;
+    n.position.set((Math.random()-.5)*C.ARENA*1.7,0,(Math.random()-.5)*C.ARENA*1.7);
+  });
+  cops.forEach(c=>scene.remove(c));
+  cops.length=0;
+
+  updateHUD();
+  document.getElementById('hud-timer').textContent = timeLeft;
+  document.getElementById('ov-start').hidden = true;
+  document.getElementById('ov-over').hidden  = true;
+
+  if (timerID) clearInterval(timerID);
+  timerID = setInterval(()=>{
+    if (phase!=='play') return;
+    timeLeft--;
+    document.getElementById('hud-timer').textContent = timeLeft;
+    if (timeLeft<=0) endGame('time');
+  }, 1000);
+}
+
+function endGame(reason) {
+  phase='dead';
+  clearInterval(timerID);
+  document.getElementById('go-score').textContent = score;
+  document.getElementById('go-title').textContent = reason==='caught' ? 'ARRÊTÉ !' : 'TEMPS ÉCOULÉ !';
+  document.getElementById('go-reason').textContent =
+    reason==='caught'
+      ? 'La police t\'a rattrapé — tu aurais dû courir plus vite.'
+      : 'Le temps est écoulé. Il est temps de fuir à Moscou.';
+
+  if (reason==='caught') {
+    const f = document.getElementById('flash');
+    f.classList.add('show');
+    setTimeout(()=>f.classList.remove('show'), 250);
+  }
+  setTimeout(()=>{ document.getElementById('ov-over').hidden=false; }, 350);
+}
+
+document.getElementById('btn-start').addEventListener('click', startGame);
+document.getElementById('btn-restart').addEventListener('click', startGame);
+
+// ── MAIN LOOP ─────────────────────────────────────────────────────────────────
+const clock = new THREE.Clock();
+
+function loop() {
+  requestAnimationFrame(loop);
+  const dt = Math.min(clock.getDelta(), .05);
+
+  if (phase !== 'play') { renderer.render(scene,cam); return; }
+
+  // ── Player input ─────────────────────────────────────────────────────────
+  let mx=0, mz=0;
+  if (joy.on) { mx=joy.dx; mz=joy.dy; }
+  else {
+    if (keys['ArrowLeft']||keys['KeyA']) mx=-1;
+    if (keys['ArrowRight']||keys['KeyD']) mx= 1;
+    if (keys['ArrowUp']||keys['KeyW'])   mz=-1;
+    if (keys['ArrowDown']||keys['KeyS']) mz= 1;
+  }
+
+  const spd = wanted>=3 ? C.RUN_SPEED : C.PLAYER_SPEED;
+  const len = Math.sqrt(mx*mx+mz*mz);
+  if (len>.01) {
+    mx/=len; mz/=len;
+    player.position.x += mx*spd*dt;
+    player.position.z += mz*spd*dt;
+    player.rotation.y  = Math.atan2(mx,mz);
+    player._wa += dt*8;
+    player._lL.rotation.x =  Math.sin(player._wa)*.55;
+    player._lR.rotation.x = -Math.sin(player._wa)*.55;
+    player._aL.rotation.x = -Math.sin(player._wa)*.42;
+    player._aR.rotation.x =  Math.sin(player._wa)*.42;
+  } else {
+    player._lL.rotation.x *= .8;
+    player._lR.rotation.x *= .8;
+    player._aL.rotation.x *= .8;
+    player._aR.rotation.x *= .8;
+  }
+  player.position.x = Math.max(-C.ARENA, Math.min(C.ARENA, player.position.x));
+  player.position.z = Math.max(-C.ARENA, Math.min(C.ARENA, player.position.z));
+  player.position.y = 0;
+
+  if (player._pa > 0) {
+    player._aR.rotation.x = -Math.PI * player._pa;
+    player._pa -= dt*7;
+    if (player._pa<0) player._pa=0;
+  }
+
+  // Camera smooth-follow
+  cam.position.x += (player.position.x       - cam.position.x)*dt*4;
+  cam.position.z += (player.position.z + 15  - cam.position.z)*dt*4;
+  cam.lookAt(player.position.x, 1, player.position.z);
+
+  // ── NPCs ─────────────────────────────────────────────────────────────────
+  for (const n of npcs) {
+    n._stun -= dt;
+    if (n._stun > 0) {
+      n.rotation.z += dt*2.5;
+      if (n._hp<=0) { n.position.y = -0.25; n.rotation.z = Math.PI/2; }
+      continue;
+    }
+    if (n._hp <= 0) {
+      n._hp=3; n.rotation.z=0; n.position.y=0;
+      n.position.set((Math.random()-.5)*C.ARENA*1.7,0,(Math.random()-.5)*C.ARENA*1.7);
+    }
+    n._wt -= dt;
+    if (n._wt<=0) {
+      n._wdst.set((Math.random()-.5)*C.ARENA,0,(Math.random()-.5)*C.ARENA);
+      n._wt = 3+Math.random()*4;
+    }
+    const dp = n.position.distanceTo(player.position);
+    let tx, tz;
+    if (wanted>0 && dp<12) {
+      const ax = n.position.x-player.position.x;
+      const az = n.position.z-player.position.z;
+      const al = Math.sqrt(ax*ax+az*az)||1;
+      tx = n.position.x + ax/al*8;
+      tz = n.position.z + az/al*8;
+    } else { tx=n._wdst.x; tz=n._wdst.z; }
+
+    const ddx=tx-n.position.x, ddz=tz-n.position.z;
+    const dd=Math.sqrt(ddx*ddx+ddz*ddz);
+    if (dd>.5) {
+      n.position.x += ddx/dd*C.NPC_SPEED*dt;
+      n.position.z += ddz/dd*C.NPC_SPEED*dt;
+      n.rotation.y  = Math.atan2(ddx,ddz);
+      n._wa += dt*6;
+      n._lL.rotation.x =  Math.sin(n._wa)*.45;
+      n._lR.rotation.x = -Math.sin(n._wa)*.45;
+    }
+    n.position.x = Math.max(-C.ARENA*1.6, Math.min(C.ARENA*1.6, n.position.x));
+    n.position.z = Math.max(-C.ARENA*1.6, Math.min(C.ARENA*1.6, n.position.z));
+  }
+
+  // ── Cops ─────────────────────────────────────────────────────────────────
+  for (const c of cops) {
+    const dx = player.position.x-c.position.x;
+    const dz = player.position.z-c.position.z;
+    const d  = Math.sqrt(dx*dx+dz*dz);
+    if (d<1.1) { endGame('caught'); return; }
+    if (d>.1) {
+      c.position.x += dx/d*C.COP_SPEED*dt;
+      c.position.z += dz/d*C.COP_SPEED*dt;
+      c.rotation.y  = Math.atan2(dx,dz);
+      c._wa += dt*8;
+      c._lL.rotation.x =  Math.sin(c._wa)*.55;
+      c._lR.rotation.x = -Math.sin(c._wa)*.55;
+      c._aL.rotation.x = -Math.sin(c._wa)*.38;
+      c._aR.rotation.x =  Math.sin(c._wa)*.38;
+    }
+  }
+
+  // ── VFX ──────────────────────────────────────────────────────────────────
+  for (let i=vfx.length-1; i>=0; i--) {
+    const m = vfx[i];
+    m._life -= dt;
+    if (m._life<=0) { scene.remove(m); vfx.splice(i,1); continue; }
+    m.position.addScaledVector(m._v, dt);
+    m._v.y -= 9*dt;
+    m.material.opacity = m._life/.5;
+    m.rotation.x += dt*4; m.rotation.z += dt*3;
+  }
+
+  drawMinimap();
+  renderer.render(scene, cam);
+}
+
+loop();
+</script>
